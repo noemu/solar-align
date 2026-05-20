@@ -9,6 +9,7 @@ export type HeadingSource =
 
 interface SensorData {
   heading: number; // 0-360 Grad Kompass
+  magneticHeading: number | null; // Magnet/Fusion-basierte Ausrichtung
   pitch: number; // -90 bis 90 (Neigung nach vorn/hinten)
   roll: number; // -180 bis 180 (Neigung links/rechts)
   latitude: number | null;
@@ -76,6 +77,7 @@ export const useSensorData = () => {
   const hasAbsoluteHeading = useRef(false);
   const [sensorData, setSensorData] = useState<SensorData>({
     heading: 0,
+    magneticHeading: null,
     pitch: 0,
     roll: 0,
     latitude: null,
@@ -124,11 +126,15 @@ export const useSensorData = () => {
         : result.usedWebkit
           ? "rel+webkit"
           : "rel+alpha";
+      const hasMagneticReference = isAbsolute || result.usedWebkit;
 
       setHeadingSource(source);
       setSensorData((prev) => ({
         ...prev,
         heading: result.heading,
+        magneticHeading: hasMagneticReference
+          ? result.heading
+          : prev.magneticHeading,
         pitch: typeof event.beta === "number" ? event.beta : prev.pitch,
         roll: typeof event.gamma === "number" ? event.gamma : prev.roll,
         rawAlpha: typeof event.alpha === "number" ? event.alpha : prev.rawAlpha,

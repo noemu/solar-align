@@ -10,7 +10,7 @@ import {
 } from "../utils/solarCalculations";
 
 export const SolarAligner: React.FC = () => {
-  const { sensorData, error, isReady } = useSensorData();
+  const { sensorData, headingSource, error, isReady } = useSensorData();
   const [duration, setDuration] = useState(4); // Stunden
   const [targetAzimuth, setTargetAzimuth] = useState(180);
   const [targetElevation, setTargetElevation] = useState(45);
@@ -19,14 +19,20 @@ export const SolarAligner: React.FC = () => {
   const [headingOffset, setHeadingOffset] = useState<number | null>(null);
 
   const normalizeHeading = (angle: number) => ((angle % 360) + 360) % 360;
+  const calibrationBaseHeading = sensorData.magneticHeading;
+  const canCalibrate = calibrationBaseHeading !== null;
   const effectiveHeading = normalizeHeading(
-    headingOffset === null
+    headingOffset === null || calibrationBaseHeading === null
       ? sensorData.heading
-      : sensorData.heading - headingOffset,
+      : calibrationBaseHeading - headingOffset,
   );
 
   const handleCalibrate = () => {
-    setHeadingOffset(sensorData.heading);
+    if (!canCalibrate || calibrationBaseHeading === null) {
+      return;
+    }
+
+    setHeadingOffset(calibrationBaseHeading);
   };
 
   const handleResetCalibration = () => {
@@ -113,7 +119,8 @@ export const SolarAligner: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleCalibrate}
-                  className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-900 active:scale-[0.99]"
+                  disabled={!canCalibrate}
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-900 disabled:cursor-not-allowed disabled:opacity-45 active:scale-[0.99]"
                 >
                   Calibrate Compass
                 </button>
@@ -135,9 +142,11 @@ export const SolarAligner: React.FC = () => {
             ? "Sensorfehler"
             : !isReady
               ? "..."
+              : !canCalibrate
+                ? "Kompass: Ohne Magnetdaten (nur IMU)"
               : headingOffset === null
-                ? "Kompass: Sensor (absolute/standard)"
-                : "Kompass: Kalibriert (relativ)"}
+                ? `Kompass: Sensor (${headingSource})`
+                : `Kompass: Kalibriert auf Magnet (${headingSource})`}
         </div>
       </div>
     </div>
