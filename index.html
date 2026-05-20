@@ -41,10 +41,22 @@
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
 
-    <!-- Service Worker Registrierung -->
+    <!-- Service Worker Registrierung (nur ausserhalb von localhost) -->
     <script>
         if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
+            window.addEventListener('load', async () => {
+                const localHosts = ['localhost', '127.0.0.1', '::1'];
+                const isLocalDev = localHosts.includes(window.location.hostname);
+
+                if (isLocalDev) {
+                    // Alte SW/Caches koennen HMR/WebSocket im Dev-Modus stoeren.
+                    const regs = await navigator.serviceWorker.getRegistrations();
+                    await Promise.all(regs.map((reg) => reg.unregister()));
+                    const cacheNames = await caches.keys();
+                    await Promise.all(cacheNames.map((key) => caches.delete(key)));
+                    return;
+                }
+
                 navigator.serviceWorker.register('/sw.js').then(reg => {
                     console.log('Service Worker registriert:', reg);
                 }).catch(err => {

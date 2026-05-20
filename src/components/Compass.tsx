@@ -11,147 +11,126 @@ export const Compass: React.FC<CompassProps> = ({
   targetAzimuth,
   isAccurate,
 }) => {
-  const size = 280;
+  const size = 220;
   const center = size / 2;
-  const radius = size / 2 - 20;
+  const radius = size / 2 - 18;
 
-  // Berechne Position des Zielzeigers
+  // Zielposition auf der rotierenden Scheibe
   const targetAngle = (targetAzimuth * Math.PI) / 180;
-  const targetX = center + radius * Math.sin(targetAngle);
-  const targetY = center - radius * Math.cos(targetAngle);
+  const targetX = center + (radius - 14) * Math.sin(targetAngle);
+  const targetY = center - (radius - 14) * Math.cos(targetAngle);
 
-  // Berechne Position des aktuellen Zeigers (immer oben)
-  const arrowSize = 40;
+  // Die Scheibe rotiert gegen den Geräte-Heading; die Nadel bleibt fix nach oben.
+  const dialRotation = -currentHeading;
 
   return (
-    <div className="flex flex-col items-center justify-center">
+    <div className="w-full max-w-[clamp(170px,58vw,300px)] aspect-square flex items-center justify-center">
       <svg
-        width={size}
-        height={size}
+        width="100%"
+        height="100%"
         viewBox={`0 0 ${size} ${size}`}
-        className="drop-shadow-lg"
+        className="drop-shadow-md"
       >
-        {/* Hintergrund */}
         <circle
           cx={center}
           cy={center}
           r={radius}
-          fill={isAccurate ? "#dcfce7" : "#fef3c7"}
-          stroke="#1a1a2e"
-          strokeWidth="2"
+          fill={isAccurate ? "#dcfce7" : "#eef2ff"}
+          stroke="#0f172a"
+          strokeWidth="2.5"
         />
 
-        {/* Kompass-Kreis */}
-        <circle
-          cx={center}
-          cy={center}
-          r={radius}
-          fill="none"
-          stroke="#1a1a2e"
-          strokeWidth="3"
-        />
+        <g transform={`rotate(${dialRotation} ${center} ${center})`}>
+          {Array.from({ length: 36 }).map((_, i) => {
+            const angle = (i * 10 * Math.PI) / 180;
+            const major = i % 9 === 0;
+            const x1 = center + (radius - (major ? 12 : 8)) * Math.sin(angle);
+            const y1 = center - (radius - (major ? 12 : 8)) * Math.cos(angle);
+            const x2 = center + radius * Math.sin(angle);
+            const y2 = center - radius * Math.cos(angle);
 
-        {/* Hauptrichtungen */}
-        <text
-          x={center}
-          y={center - radius + 25}
-          textAnchor="middle"
-          className="font-bold text-lg fill-red-600"
-        >
-          N
-        </text>
-        <text
-          x={center + radius - 25}
-          y={center + 7}
-          textAnchor="middle"
-          className="font-bold text-lg fill-gray-600"
-        >
-          E
-        </text>
-        <text
-          x={center}
-          y={center + radius - 5}
-          textAnchor="middle"
-          className="font-bold text-lg fill-gray-600"
-        >
-          S
-        </text>
-        <text
-          x={center - radius + 25}
-          y={center + 7}
-          textAnchor="middle"
-          className="font-bold text-lg fill-gray-600"
-        >
-          W
-        </text>
+            return (
+              <line
+                key={i}
+                x1={x1}
+                y1={y1}
+                x2={x2}
+                y2={y2}
+                stroke="#334155"
+                strokeWidth={major ? "2" : "1"}
+              />
+            );
+          })}
 
-        {/* Gradmarkierungen */}
-        {Array.from({ length: 36 }).map((_, i) => {
-          const angle = (i * 10 * Math.PI) / 180;
-          const x1 = center + (radius - 10) * Math.sin(angle);
-          const y1 = center - (radius - 10) * Math.cos(angle);
-          const x2 = center + radius * Math.sin(angle);
-          const y2 = center - radius * Math.cos(angle);
-          return (
-            <line
-              key={i}
-              x1={x1}
-              y1={y1}
-              x2={x2}
-              y2={y2}
-              stroke="#1a1a2e"
-              strokeWidth="1"
-            />
-          );
-        })}
+          <text
+            x={center}
+            y={center - radius + 22}
+            textAnchor="middle"
+            className="font-bold text-sm fill-rose-600"
+          >
+            N
+          </text>
+          <text
+            x={center + radius - 20}
+            y={center + 5}
+            textAnchor="middle"
+            className="font-bold text-sm fill-slate-600"
+          >
+            E
+          </text>
+          <text
+            x={center}
+            y={center + radius - 8}
+            textAnchor="middle"
+            className="font-bold text-sm fill-slate-600"
+          >
+            S
+          </text>
+          <text
+            x={center - radius + 20}
+            y={center + 5}
+            textAnchor="middle"
+            className="font-bold text-sm fill-slate-600"
+          >
+            W
+          </text>
 
-        {/* Zielmarker (Sonne/Target) */}
-        <circle
-          cx={targetX}
-          cy={targetY}
-          r="8"
-          fill="#fbbf24"
-          stroke="#d97706"
-          strokeWidth="2"
-        />
-        <circle
-          cx={targetX}
-          cy={targetY}
-          r="14"
-          fill="none"
-          stroke="#fbbf24"
-          strokeWidth="1"
-          opacity="0.5"
-        />
-
-        {/* Aktueller Zeiger (oben) - Blau */}
-        <g transform={`translate(${center}, ${center - radius + 10})`}>
-          <polygon
-            points={`0,-${arrowSize / 2} ${arrowSize / 2},${arrowSize / 2} 0,${arrowSize / 4} -${arrowSize / 2},${arrowSize / 2}`}
-            fill="#3b82f6"
-            stroke="#1e40af"
+          <circle
+            cx={targetX}
+            cy={targetY}
+            r="8"
+            fill="#fbbf24"
+            stroke="#b45309"
             strokeWidth="2"
+          />
+          <circle
+            cx={targetX}
+            cy={targetY}
+            r="14"
+            fill="none"
+            stroke="#f59e0b"
+            strokeWidth="1"
+            opacity="0.45"
           />
         </g>
 
-        {/* Mittelpunkt */}
-        <circle cx={center} cy={center} r="6" fill="#1a1a2e" />
+        <line
+          x1={center}
+          y1={center - radius + 14}
+          x2={center}
+          y2={center + 14}
+          stroke="#2563eb"
+          strokeWidth="4"
+          strokeLinecap="round"
+        />
+        <polygon
+          points={`${center},${center - radius + 2} ${center - 10},${center - radius + 20} ${center + 10},${center - radius + 20}`}
+          fill="#2563eb"
+          stroke="#1e3a8a"
+          strokeWidth="1.5"
+        />
+        <circle cx={center} cy={center} r="5" fill="#0f172a" />
       </svg>
-
-      {/* Infos unter dem Kompass */}
-      <div className="mt-4 text-center">
-        <div className="text-sm text-gray-600">
-          Aktuelle Richtung: {currentHeading}°
-        </div>
-        <div className="text-sm text-amber-600 font-semibold">
-          Ziel: {targetAzimuth}°
-        </div>
-        <div
-          className={`text-xs mt-1 ${isAccurate ? "text-green-600" : "text-yellow-600"}`}
-        >
-          {isAccurate ? "✓ Ausrichtung korrekt!" : "Stelle dein Handy aus"}
-        </div>
-      </div>
     </div>
   );
 };

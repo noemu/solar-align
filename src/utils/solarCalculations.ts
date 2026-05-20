@@ -1,3 +1,5 @@
+import * as SunCalc from "suncalc";
+
 /**
  * Berechnet die optimale Ausrichtung des PV-Moduls basierend auf:
  * - Breitengrad
@@ -7,7 +9,7 @@
 
 interface SolarPosition {
   azimuth: number; // 0-360 Grad (Kompass-Richtung)
-  elevation: number; // 0-90 Grad (Höhenwinkel)
+  tilt: number; // 0-90 Grad (Panel-Neigung, 0 = flach, 90 = steil)
   timeUntilOptimal: number; // Minuten
 }
 
@@ -21,8 +23,6 @@ const MINUTES_PER_DAY = 1440;
 const NOON_MINUTES = 720;
 
 const normalizeHeading = (angle: number) => ((angle % 360) + 360) % 360;
-
-import * as SunCalc from "suncalc";
 
 const getSolarSnapshot = (latitude: number, longitude: number, date: Date) => {
   const pos = SunCalc.getPosition(date, latitude, longitude);
@@ -53,8 +53,7 @@ const getAverageAzimuth = (angles: number[]) => {
 };
 
 /**
- * Vereinfachte Berechnung des Azimut (Kompass-Richtung) der Sonne
- * Real-world würde man eine Bibliothek wie 'suncalc' verwenden
+ * Exakte Sonnenstandsberechnung via SunCalc mit Mittelwertbildung im Zeitfenster.
  */
 export const calculateSolarPosition = (
   params: SolarParams,
@@ -62,7 +61,8 @@ export const calculateSolarPosition = (
 ): SolarPosition => {
   const { latitude, longitude, duration } = params;
   const durationMinutes = Math.max(1, Math.round(duration * 60));
-  const sampleStep = Math.max(5, Math.round(durationMinutes / 12));
+  // Fester Schritt verhindert Spruenge bei Slider-Aenderungen durch wechselnde Diskretisierung.
+  const sampleStep = 2;
   const sampleCount = Math.max(2, Math.ceil(durationMinutes / sampleStep) + 1);
 
   const samples = Array.from({ length: sampleCount }, (_, index) => {
@@ -74,6 +74,8 @@ export const calculateSolarPosition = (
   const azimuth = getAverageAzimuth(samples.map((sample) => sample.azimuth));
   const elevation =
     samples.reduce((sum, sample) => sum + sample.elevation, 0) / samples.length;
+  // Physik: Wenn die Sonne tiefer steht, muss das Panel steiler sein.
+  const tilt = 90 - elevation;
 
   // Zeit bis zum Sonnenhöchststand (ungefähr)
   const nowMinutes = getMinutesOfDay(now);
@@ -83,9 +85,9 @@ export const calculateSolarPosition = (
   }
 
   return {
-    azimuth: Math.round(azimuth),
-    elevation: Math.round(elevation),
-    timeUntilOptimal: Math.round(timeUntilOptimal),
+    azimuth,
+    tilt,
+    timeUntilOptimal,
   };
 };
 
@@ -96,7 +98,7 @@ export const calculateAlignmentError = (
   currentHeading: number,
   currentPitch: number,
   targetAzimuth: number,
-  targetElevation: number,
+  targetTilt: number,
 ): { headingError: number; elevationError: number } => {
   const current = normalizeHeading(currentHeading);
   const target = normalizeHeading(targetAzimuth);
@@ -106,8 +108,8 @@ export const calculateAlignmentError = (
   if (headingError > 180) headingError -= 360;
   if (headingError < -180) headingError += 360;
 
-  // Elevation Error
-  const elevationError = targetElevation - currentPitch;
+  // Elevation Error auf Basis des absoluten Neigungswinkels (0..90°)
+  const elevationError = targetTilt - Math.abs(currentPitch);
 
   return {
     headingError: Math.round(headingError),

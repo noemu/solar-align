@@ -3,127 +3,56 @@ import React from "react";
 interface InclinationBarProps {
   currentPitch: number; // Aktuelle Neigung (-90 bis 90)
   targetElevation: number; // Zielneigung (0-90)
-  headingError: number; // Horizontaler Fehler
-  elevationError: number; // Vertikaler Fehler
 }
 
 export const InclinationBar: React.FC<InclinationBarProps> = ({
   currentPitch,
   targetElevation,
-  headingError,
-  elevationError,
 }) => {
-  // Normalisiere auf -90 bis 90
-  const clampedCurrent = Math.max(-90, Math.min(90, currentPitch));
+  // Für PV ist nur 0..90° relevant.
+  const clampedCurrent = Math.max(0, Math.min(90, Math.abs(currentPitch)));
   const clampedTarget = Math.max(0, Math.min(90, targetElevation));
 
-  // Prozentuale Position (0 = unten, 100 = oben)
-  const currentPercent = ((clampedCurrent + 90) / 180) * 100;
-  const targetPercent = ((clampedTarget + 90) / 180) * 100;
-
-  const barHeight = 300;
+  // 0° unten, 90° oben
+  const currentPercent = (clampedCurrent / 90) * 100;
+  const targetPercent = (clampedTarget / 90) * 100;
+  const currentPercentInBox = Math.max(2, Math.min(98, currentPercent));
+  const targetPercentInBox = Math.max(8, Math.min(92, targetPercent));
 
   return (
-    <div className="flex gap-6 items-stretch">
-      {/* Höhenwinkel-Balken */}
-      <div>
-        <h3 className="text-sm font-semibold text-gray-700 mb-2 text-center">
-          Höhe
-        </h3>
-        <div
-          className="relative bg-gradient-to-b from-blue-100 to-orange-100 rounded-lg border-2 border-gray-400"
-          style={{ height: `${barHeight}px`, width: "60px" }}
-        >
-          {/* Hintergrundraster */}
-          {Array.from({ length: 9 }).map((_, i) => (
-            <div
-              key={`line-${i}`}
-              className="absolute w-full border-t border-gray-300 opacity-30"
-              style={{ top: `${(i * 100) / 8}%` }}
-            />
-          ))}
-
-          {/* Zielmarker (Sonne gelb) */}
-          <div
-            className="absolute left-1/2 transform -translate-x-1/2 w-full flex items-center justify-center transition-all"
-            style={{ bottom: `${targetPercent}%` }}
-          >
-            <div className="bg-yellow-400 border-2 border-yellow-600 rounded-full p-1 shadow-lg">
-              <div className="w-6 h-6 flex items-center justify-center text-xs font-bold">
-                ☀️
-              </div>
-            </div>
-          </div>
-
-          {/* Aktueller Wert (blauer Balken) */}
-          <div
-            className="absolute left-0 right-0 bg-blue-400 transition-all duration-200 rounded border-2 border-blue-600"
-            style={{
-              height: `${barHeight * 0.08}px`,
-              bottom: `${currentPercent}%`,
-            }}
-          />
-        </div>
-
-        {/* Legende */}
-        <div className="mt-3 text-xs space-y-1">
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 bg-blue-400 border border-blue-600 rounded" />
-            <span>Aktuell: {Math.round(clampedCurrent)}°</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 bg-yellow-400 border border-yellow-600 rounded-full text-center text-xs leading-none">
-              ☀️
-            </div>
-            <span>Ziel: {Math.round(clampedTarget)}°</span>
-          </div>
-        </div>
+    <div className="h-full w-full flex items-stretch gap-2">
+      <div className="h-full min-h-0 flex flex-col justify-between text-[10px] text-slate-700 py-1 font-semibold">
+        <span>90°</span>
+        <span>60°</span>
+        <span>30°</span>
+        <span>0°</span>
       </div>
 
-      {/* Horizontaler Fehlerindikator */}
-      <div>
-        <h3 className="text-sm font-semibold text-gray-700 mb-2 text-center">
-          Richtung
-        </h3>
-        <div
-          className="relative bg-gradient-to-l from-red-100 via-green-100 to-red-100 rounded-lg border-2 border-gray-400"
-          style={{ height: `${barHeight}px`, width: "80px" }}
-        >
-          {/* Mittellinie */}
-          <div className="absolute top-0 bottom-0 left-1/2 transform -translate-x-1/2 w-1 bg-green-500" />
-
-          {/* Fehlerwert als Balken */}
+      <div className="relative w-[84px] h-full min-h-0 rounded-lg border-2 border-slate-700 bg-slate-50 shadow-inner overflow-hidden">
+        {Array.from({ length: 10 }).map((_, i) => (
           <div
-            className={`absolute top-1/2 h-8 transform -translate-y-1/2 transition-all ${
-              Math.abs(headingError) < 5
-                ? "bg-green-500"
-                : Math.abs(headingError) < 15
-                  ? "bg-yellow-400"
-                  : "bg-red-500"
-            } border-2 ${Math.abs(headingError) < 5 ? "border-green-700" : "border-red-700"}`}
-            style={{
-              left:
-                headingError > 0
-                  ? "50%"
-                  : `calc(50% - ${Math.abs(headingError) * 2}px)`,
-              width: `${Math.min(Math.abs(headingError) * 2, 40)}px`,
-            }}
+            key={`line-${i}`}
+            className="absolute left-0 right-0 border-t border-slate-300"
+            style={{ top: `${(i * 100) / 9}%` }}
           />
+        ))}
+
+        <div
+          className="absolute left-1/2 -translate-x-1/2 w-full flex items-center justify-center transition-all duration-200"
+          style={{ bottom: `${targetPercentInBox}%` }}
+        >
+          <div className="w-7 h-7 rounded-full bg-amber-300 border-2 border-amber-700 flex items-center justify-center text-[10px] shadow">
+            ☀️
+          </div>
         </div>
 
-        {/* Legende */}
-        <div className="mt-3 text-xs space-y-1">
-          <div className="text-center">
-            <span className="font-semibold">
-              {headingError > 0 ? "→" : "←"} {Math.abs(headingError)}°
-            </span>
-          </div>
-          <div className="text-center text-gray-500 text-xs">
-            {Math.abs(headingError) < 5
-              ? "Perfekt!"
-              : Math.abs(headingError) < 15
-                ? "Fast"
-                : "Weiter drehen"}
+        <div
+          className="absolute left-1 right-1 transition-all duration-200"
+          style={{ bottom: `${currentPercentInBox}%` }}
+        >
+          <div className="flex items-center">
+            <div className="w-0 h-0 border-y-[6px] border-y-transparent border-r-[10px] border-r-blue-700" />
+            <div className="h-[4px] flex-1 bg-blue-600 rounded-full" />
           </div>
         </div>
       </div>
