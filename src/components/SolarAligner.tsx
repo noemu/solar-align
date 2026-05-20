@@ -90,7 +90,7 @@ export const SolarAligner: React.FC = () => {
           <DurationSlider
             duration={duration}
             onChange={setDuration}
-            min={0.5}
+            min={0}
             max={12}
           />
         </section>
