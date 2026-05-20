@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 
+export type HeadingSource =
+  | "none"
+  | "abs+webkit"
+  | "abs+alpha"
+  | "rel+webkit"
+  | "rel+alpha";
+
 interface SensorData {
   heading: number; // 0-360 Grad Kompass
   pitch: number; // -90 bis 90 (Neigung nach vorn/hinten)
@@ -7,6 +14,7 @@ interface SensorData {
   latitude: number | null;
   longitude: number | null;
   accuracy: number | null;
+  rawAlpha: number | null; // unbearbeiteter alpha-Wert
 }
 
 interface SensorError {
@@ -35,12 +43,15 @@ const getScreenOrientationAngle = () => {
 
 const getHeadingFromEvent = (
   event: OrientationEventWithCompass,
-): number | null => {
+): { heading: number; usedWebkit: boolean } | null => {
   if (
     typeof event.webkitCompassHeading === "number" &&
     Number.isFinite(event.webkitCompassHeading)
   ) {
-    return normalizeHeading(event.webkitCompassHeading);
+    return {
+      heading: normalizeHeading(event.webkitCompassHeading),
+      usedWebkit: true,
+    };
   }
 
   if (typeof event.alpha !== "number" || !Number.isFinite(event.alpha)) {
@@ -58,7 +69,7 @@ const getHeadingFromEvent = (
     heading += 180;
   }
 
-  return normalizeHeading(heading);
+  return { heading: normalizeHeading(heading), usedWebkit: false };
 };
 
 export const useSensorData = () => {
@@ -70,7 +81,9 @@ export const useSensorData = () => {
     latitude: null,
     longitude: null,
     accuracy: null,
+    rawAlpha: null,
   });
+  const [headingSource, setHeadingSource] = useState<HeadingSource>("none");
   const [error, setError] = useState<SensorError | null>(null);
   const [isReady, setIsReady] = useState(false);
 
@@ -89,9 +102,9 @@ export const useSensorData = () => {
       isAbsolute: boolean,
     ) => {
       const event = rawEvent as OrientationEventWithCompass;
-      const heading = getHeadingFromEvent(event);
+      const result = getHeadingFromEvent(event);
 
-      if (heading === null) {
+      if (result === null) {
         return;
       }
 
@@ -104,11 +117,21 @@ export const useSensorData = () => {
         return;
       }
 
+      const source: HeadingSource = isAbsolute
+        ? result.usedWebkit
+          ? "abs+webkit"
+          : "abs+alpha"
+        : result.usedWebkit
+          ? "rel+webkit"
+          : "rel+alpha";
+
+      setHeadingSource(source);
       setSensorData((prev) => ({
         ...prev,
-        heading,
+        heading: result.heading,
         pitch: typeof event.beta === "number" ? event.beta : prev.pitch,
         roll: typeof event.gamma === "number" ? event.gamma : prev.roll,
+        rawAlpha: typeof event.alpha === "number" ? event.alpha : prev.rawAlpha,
       }));
     };
 
@@ -203,5 +226,5 @@ export const useSensorData = () => {
     };
   }, []);
 
-  return { sensorData, error, isReady };
+  return { sensorData, headingSource, error, isReady };
 };

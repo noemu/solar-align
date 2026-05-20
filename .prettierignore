@@ -1,12 +1,8 @@
-# Vector UI Components - Prettier Ignore Template
-# This file is managed by @vector/uic-config package
-# To update: npx copy-prettierignore
 
-# Dependencies and package manager files
 node_modules/
 **/node_modules/
 
-# Build outputs and generated files
+
 dist/
 build/
 storybook-static/
@@ -15,14 +11,14 @@ storybook-static/
 .output/
 .turbo/
 
-# Logs and temporary files
+
 *.log
 *.tmp
 *.temp
 .DS_Store
 Thumbs.db
 
-# Environment files
+
 .env
 .env.local
 .env.development.local
@@ -31,36 +27,36 @@ Thumbs.db
 .env*
 !.env.example
 
-# Coverage directory used by tools like istanbul
+
 coverage/
 *.lcov
 
-# Package manager files
+
 package-lock.json
 yarn.lock
 pnpm-lock.yaml
 .pnpm-store/
 
-# IDE and editor files
+
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 
-# Configuration cache
+
 .eslintcache
 
-# Version control
+
 .git/
 .svn/
 .hg/
 
-# Generated API documentation
+
 docs/api/
 
-# Prettier ignore (self-reference)
+
 .prettierignore
 
-# Auto-generated files that shouldn't be formatted
-# (Add project-specific patterns here)
+
+

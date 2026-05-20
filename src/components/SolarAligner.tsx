@@ -16,6 +16,20 @@ export const SolarAligner: React.FC = () => {
   const [targetElevation, setTargetElevation] = useState(45);
   const [elevationError, setElevationError] = useState(0);
   const [isAccurate, setIsAccurate] = useState(false);
+  const [headingOffset, setHeadingOffset] = useState<number | null>(null);
+
+  const normalizeHeading = (angle: number) => ((angle % 360) + 360) % 360;
+  const effectiveHeading = normalizeHeading(
+    headingOffset === null ? sensorData.heading : sensorData.heading - headingOffset,
+  );
+
+  const handleCalibrate = () => {
+    setHeadingOffset(sensorData.heading);
+  };
+
+  const handleResetCalibration = () => {
+    setHeadingOffset(null);
+  };
 
   // Berechne Solar-Position wenn GPS-Daten vorhanden sind
   useEffect(() => {
@@ -38,7 +52,7 @@ export const SolarAligner: React.FC = () => {
   // Berechne Ausrichtungsfehler
   useEffect(() => {
     const errors = calculateAlignmentError(
-      sensorData.heading,
+      effectiveHeading,
       sensorData.pitch,
       targetAzimuth,
       targetElevation,
@@ -52,7 +66,7 @@ export const SolarAligner: React.FC = () => {
       5,
     );
     setIsAccurate(accurate);
-  }, [sensorData.heading, sensorData.pitch, targetAzimuth, targetElevation]);
+  }, [effectiveHeading, sensorData.pitch, targetAzimuth, targetElevation]);
 
   return (
     <div className="h-dvh overflow-hidden bg-gradient-to-b from-sky-100 via-indigo-50 to-amber-100 px-3 py-2 text-slate-900">
@@ -78,18 +92,43 @@ export const SolarAligner: React.FC = () => {
               />
             </div>
 
-            <div className="min-w-0 h-full flex items-center justify-center">
-              <Compass
-                currentHeading={sensorData.heading}
-                targetAzimuth={targetAzimuth}
-                isAccurate={isAccurate && elevationError < 10}
-              />
+            <div className="min-w-0 h-full min-h-0 flex flex-col items-center">
+              <div className="w-full min-h-0 flex-1 flex items-center justify-center">
+                <Compass
+                  currentHeading={effectiveHeading}
+                  targetAzimuth={targetAzimuth}
+                  isAccurate={isAccurate && elevationError < 10}
+                />
+              </div>
+              <div className="mt-auto flex w-full items-center justify-center gap-2 px-1 pb-1">
+                <button
+                  type="button"
+                  onClick={handleCalibrate}
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-900 active:scale-[0.99]"
+                >
+                  Calibrate Compass
+                </button>
+                <button
+                  type="button"
+                  onClick={handleResetCalibration}
+                  disabled={headingOffset === null}
+                  className="rounded-lg border border-slate-300 bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-800 disabled:cursor-not-allowed disabled:opacity-45 active:scale-[0.99]"
+                >
+                  Reset
+                </button>
+              </div>
             </div>
           </div>
         </main>
 
         <div className="text-center text-xs text-slate-600 h-4">
-          {error ? "Sensorfehler" : !isReady ? "..." : ""}
+          {error
+            ? "Sensorfehler"
+            : !isReady
+              ? "..."
+              : headingOffset === null
+                ? "Kompass: Sensor (absolute/standard)"
+                : "Kompass: Kalibriert (relativ)"}
         </div>
       </div>
     </div>
