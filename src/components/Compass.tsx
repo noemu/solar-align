@@ -20,8 +20,8 @@ export const Compass: React.FC<CompassProps> = ({
   const targetX = center + (radius - 14) * Math.sin(targetAngle);
   const targetY = center - (radius - 14) * Math.cos(targetAngle);
 
-  // Die Scheibe rotiert gegen den Geräte-Heading; die Nadel bleibt fix nach oben.
-  const dialRotation = -currentHeading;
+  // Die Scheibe rotiert mit dem Geräte-Heading; die Nadel bleibt fix nach oben.
+  const dialRotation = currentHeading;
 
   return (
     <div className="w-full max-w-[clamp(170px,58vw,300px)] aspect-square flex items-center justify-center">
