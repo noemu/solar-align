@@ -68,7 +68,8 @@ export const SolarAligner: React.FC = () => {
           Richte dein PV-Modul optimal zur Sonne aus
         </p>
         <p className="text-blue-500 text-xs mt-1 text-center">
-          Zielwert: Mittelwert der Sonnenposition von jetzt bis in <b>{duration}h</b>
+          Zielwert: Mittelwert der Sonnenposition von jetzt bis in{" "}
+          <b>{duration}h</b>
         </p>
       </header>
 
@@ -129,11 +130,15 @@ export const SolarAligner: React.FC = () => {
             <div className="flex flex-row gap-4 mt-2 w-full justify-center">
               <div className="flex flex-col items-center bg-blue-50 rounded-xl px-3 py-2 shadow text-blue-800">
                 <span className="text-xs font-semibold">Neigung aktuell</span>
-                <span className="text-2xl font-bold">{Math.round(sensorData.pitch)}°</span>
+                <span className="text-2xl font-bold">
+                  {Math.round(sensorData.pitch)}°
+                </span>
               </div>
               <div className="flex flex-col items-center bg-amber-50 rounded-xl px-3 py-2 shadow text-amber-800">
                 <span className="text-xs font-semibold">Neigung Ziel</span>
-                <span className="text-2xl font-bold">{Math.round(targetElevation)}°</span>
+                <span className="text-2xl font-bold">
+                  {Math.round(targetElevation)}°
+                </span>
               </div>
             </div>
           </div>
@@ -155,34 +160,61 @@ export const SolarAligner: React.FC = () => {
             </h3>
             <div className="grid grid-cols-2 gap-3 text-center">
               <div className="rounded-lg bg-blue-50 p-2">
-                <div className="text-xs text-blue-700 font-semibold">KOMPASS</div>
-                <div className="text-xl font-bold text-blue-600">{sensorData.heading}°</div>
-                <div className="text-xs text-blue-500 mt-1">Aktuelle Ausrichtung</div>
+                <div className="text-xs text-blue-700 font-semibold">
+                  KOMPASS
+                </div>
+                <div className="text-xl font-bold text-blue-600">
+                  {sensorData.heading}°
+                </div>
+                <div className="text-xs text-blue-500 mt-1">
+                  Aktuelle Ausrichtung
+                </div>
               </div>
               <div className="rounded-lg bg-amber-50 p-2">
                 <div className="text-xs text-amber-700 font-semibold">ZIEL</div>
-                <div className="text-xl font-bold text-amber-600">{targetAzimuth}°</div>
-                <div className="text-xs text-amber-500 mt-1">Sonne-Richtung</div>
+                <div className="text-xl font-bold text-amber-600">
+                  {targetAzimuth}°
+                </div>
+                <div className="text-xs text-amber-500 mt-1">
+                  Sonne-Richtung
+                </div>
               </div>
               <div className="rounded-lg bg-green-50 p-2 col-span-2">
-                <div className="text-xs text-green-700 font-semibold">FEHLER</div>
-                <div className={`text-xl font-bold ${isAccurate ? "text-green-600" : "text-red-600"}`}>{Math.abs(headingError)}°</div>
+                <div className="text-xs text-green-700 font-semibold">
+                  FEHLER
+                </div>
+                <div
+                  className={`text-xl font-bold ${isAccurate ? "text-green-600" : "text-red-600"}`}
+                >
+                  {Math.abs(headingError)}°
+                </div>
                 <div className="text-xs text-green-500 mt-1">Abweichung</div>
               </div>
               <div className="rounded-lg bg-blue-50 p-2">
-                <div className="text-xs text-blue-700 font-semibold">NEIGUNG AKTUELL</div>
-                <div className="text-xl font-bold text-blue-600">{Math.round(sensorData.pitch)}°</div>
+                <div className="text-xs text-blue-700 font-semibold">
+                  NEIGUNG AKTUELL
+                </div>
+                <div className="text-xl font-bold text-blue-600">
+                  {Math.round(sensorData.pitch)}°
+                </div>
                 <div className="text-xs text-blue-500 mt-1">Höhenwinkel</div>
               </div>
               <div className="rounded-lg bg-amber-50 p-2">
-                <div className="text-xs text-amber-700 font-semibold">NEIGUNG ZIEL</div>
-                <div className="text-xl font-bold text-amber-600">{Math.round(targetElevation)}°</div>
+                <div className="text-xs text-amber-700 font-semibold">
+                  NEIGUNG ZIEL
+                </div>
+                <div className="text-xl font-bold text-amber-600">
+                  {Math.round(targetElevation)}°
+                </div>
                 <div className="text-xs text-amber-500 mt-1">Sonne-Höhe</div>
               </div>
               <div className="rounded-lg bg-gray-50 p-2 col-span-2">
-                <div className="text-xs text-gray-700 font-semibold">POSITION</div>
+                <div className="text-xs text-gray-700 font-semibold">
+                  POSITION
+                </div>
                 <div className="text-xs font-mono text-gray-700 mt-1">
-                  {sensorData.latitude?.toFixed(4)}°<br />{sensorData.longitude?.toFixed(4)}°
+                  {sensorData.latitude?.toFixed(4)}°<br />
+                  {sensorData.longitude?.toFixed(4)}°
                 </div>
               </div>
             </div>
@@ -194,9 +226,16 @@ export const SolarAligner: React.FC = () => {
           <section className="w-full">
             <div className="bg-gradient-to-r from-green-100 to-emerald-100 border-2 border-green-500 rounded-2xl p-6 text-center shadow-lg">
               <div className="text-3xl mb-2">🎉</div>
-              <div className="text-xl font-bold text-green-800">Perfekte Ausrichtung erreicht!</div>
-              <div className="text-sm text-green-700 mt-2">Dein PV-Modul ist optimal auf die Sonne ausgerichtet. Die nächsten {duration} Stunden sollten optimal sein.</div>
-              <div className="text-xs text-green-700 mt-1">Referenzzeitpunkt des Fensters: in {midpointHours.toFixed(1)}h</div>
+              <div className="text-xl font-bold text-green-800">
+                Perfekte Ausrichtung erreicht!
+              </div>
+              <div className="text-sm text-green-700 mt-2">
+                Dein PV-Modul ist optimal auf die Sonne ausgerichtet. Die
+                nächsten {duration} Stunden sollten optimal sein.
+              </div>
+              <div className="text-xs text-green-700 mt-1">
+                Referenzzeitpunkt des Fensters: in {midpointHours.toFixed(1)}h
+              </div>
             </div>
           </section>
         )}

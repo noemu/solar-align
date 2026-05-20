@@ -22,7 +22,7 @@ const NOON_MINUTES = 720;
 
 const normalizeHeading = (angle: number) => ((angle % 360) + 360) % 360;
 
-import * as SunCalc from 'suncalc';
+import * as SunCalc from "suncalc";
 
 const getSolarSnapshot = (latitude: number, longitude: number, date: Date) => {
   const pos = SunCalc.getPosition(date, latitude, longitude);
