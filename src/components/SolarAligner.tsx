@@ -46,7 +46,8 @@ export const SolarAligner: React.FC = () => {
         duration,
       });
 
-      setTargetAzimuth(solarPos.azimuth);
+      // Ziel fuer die obere Modulkante: entgegengesetzt zur Sonnenrichtung.
+      setTargetAzimuth(normalizeHeading(solarPos.azimuth + 180));
       setTargetElevation(solarPos.tilt);
     }
   }, [isReady, sensorData.latitude, sensorData.longitude, duration]);
