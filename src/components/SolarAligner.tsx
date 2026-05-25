@@ -10,7 +10,14 @@ import {
 } from "../utils/solarCalculations";
 
 export const SolarAligner: React.FC = () => {
-  const { sensorData, headingSource, error, isReady } = useSensorData();
+  const {
+    sensorData,
+    headingSource,
+    error,
+    isReady,
+    requestOrientationPermission,
+    permissionRequired,
+  } = useSensorData();
   const [duration, setDuration] = useState(4); // Stunden
   const [targetAzimuth, setTargetAzimuth] = useState(180);
   const [targetElevation, setTargetElevation] = useState(45);
@@ -132,6 +139,15 @@ export const SolarAligner: React.FC = () => {
                 >
                   Reset
                 </button>
+                {permissionRequired && (
+                  <button
+                    type="button"
+                    onClick={() => void requestOrientationPermission()}
+                    className="rounded-lg border border-rose-400 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 active:scale-[0.99]"
+                  >
+                    Sensoren aktivieren
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -140,13 +156,15 @@ export const SolarAligner: React.FC = () => {
         <div className="text-center text-xs text-slate-600 h-4">
           {error
             ? "Sensorfehler"
-            : !isReady
-              ? "..."
-              : !canCalibrate
-                ? "Kompass: Ohne Magnetdaten (nur IMU)"
-                : headingOffset === null
-                  ? `Kompass: Sensor (${headingSource})`
-                  : `Kompass: Kalibriert auf Magnet (${headingSource})`}
+            : permissionRequired
+              ? "Tippe 'Sensoren aktivieren' oben, um Berechtigungen zu erlauben"
+              : !isReady
+                ? "..."
+                : !canCalibrate
+                  ? "Kompass: Ohne Magnetdaten (nur IMU)"
+                  : headingOffset === null
+                    ? `Kompass: Sensor (${headingSource})`
+                    : `Kompass: Kalibriert auf Magnet (${headingSource})`}
         </div>
       </div>
     </div>

@@ -75,6 +75,7 @@ const getHeadingFromEvent = (
 
 export const useSensorData = () => {
   const hasAbsoluteHeading = useRef(false);
+  const [permissionRequired, setPermissionRequired] = useState(false);
   const [sensorData, setSensorData] = useState<SensorData>({
     heading: 0,
     magneticHeading: null,
@@ -90,6 +91,69 @@ export const useSensorData = () => {
   const [isReady, setIsReady] = useState(false);
 
   // Device Orientation (Kompass + Neigung)
+  const handleOrientation = (
+    rawEvent: DeviceOrientationEvent,
+    isAbsolute: boolean,
+  ) => {
+    const event = rawEvent as OrientationEventWithCompass;
+    const result = getHeadingFromEvent(event);
+
+    if (result === null) {
+      return;
+    }
+
+    if (isAbsolute) {
+      hasAbsoluteHeading.current = true;
+    }
+
+    // Sobald absolute Werte vorhanden sind, relative Werte ignorieren.
+    if (!isAbsolute && hasAbsoluteHeading.current) {
+      return;
+    }
+
+    const source: HeadingSource = isAbsolute
+      ? result.usedWebkit
+        ? "abs+webkit"
+        : "abs+alpha"
+      : result.usedWebkit
+        ? "rel+webkit"
+        : "rel+alpha";
+    const hasMagneticReference = isAbsolute || result.usedWebkit;
+
+    setHeadingSource(source);
+    setSensorData((prev) => ({
+      ...prev,
+      heading: result.heading,
+      magneticHeading: hasMagneticReference
+        ? result.heading
+        : prev.magneticHeading,
+      pitch: typeof event.beta === "number" ? event.beta : prev.pitch,
+      roll: typeof event.gamma === "number" ? event.gamma : prev.roll,
+      rawAlpha: typeof event.alpha === "number" ? event.alpha : prev.rawAlpha,
+    }));
+  };
+
+  const onAbsoluteOrientation = (event: DeviceOrientationEvent) => {
+    handleOrientation(event, true);
+  };
+
+  const onOrientation = (event: DeviceOrientationEvent) => {
+    handleOrientation(event, false);
+  };
+
+  const attachOrientationListeners = () => {
+    window.addEventListener("deviceorientationabsolute", onAbsoluteOrientation);
+    window.addEventListener("deviceorientation", onOrientation);
+  };
+
+  const detachOrientationListeners = () => {
+    window.removeEventListener(
+      "deviceorientationabsolute",
+      onAbsoluteOrientation,
+    );
+    window.removeEventListener("deviceorientation", onOrientation);
+  };
+
   useEffect(() => {
     if (typeof DeviceOrientationEvent === "undefined") {
       setError({
@@ -99,99 +163,54 @@ export const useSensorData = () => {
       return;
     }
 
-    const handleOrientation = (
-      rawEvent: DeviceOrientationEvent,
-      isAbsolute: boolean,
-    ) => {
-      const event = rawEvent as OrientationEventWithCompass;
-      const result = getHeadingFromEvent(event);
-
-      if (result === null) {
-        return;
-      }
-
-      if (isAbsolute) {
-        hasAbsoluteHeading.current = true;
-      }
-
-      // Sobald absolute Werte vorhanden sind, relative Werte ignorieren.
-      if (!isAbsolute && hasAbsoluteHeading.current) {
-        return;
-      }
-
-      const source: HeadingSource = isAbsolute
-        ? result.usedWebkit
-          ? "abs+webkit"
-          : "abs+alpha"
-        : result.usedWebkit
-          ? "rel+webkit"
-          : "rel+alpha";
-      const hasMagneticReference = isAbsolute || result.usedWebkit;
-
-      setHeadingSource(source);
-      setSensorData((prev) => ({
-        ...prev,
-        heading: result.heading,
-        magneticHeading: hasMagneticReference
-          ? result.heading
-          : prev.magneticHeading,
-        pitch: typeof event.beta === "number" ? event.beta : prev.pitch,
-        roll: typeof event.gamma === "number" ? event.gamma : prev.roll,
-        rawAlpha: typeof event.alpha === "number" ? event.alpha : prev.rawAlpha,
-      }));
-    };
-
-    const onAbsoluteOrientation = (event: DeviceOrientationEvent) => {
-      handleOrientation(event, true);
-    };
-
-    const onOrientation = (event: DeviceOrientationEvent) => {
-      handleOrientation(event, false);
-    };
-
-    const attachOrientationListeners = () => {
-      window.addEventListener(
-        "deviceorientationabsolute",
-        onAbsoluteOrientation,
-      );
-      window.addEventListener("deviceorientation", onOrientation);
-    };
-
-    // Check permission (iOS 13+)
+    // Check permission (iOS 13+). On iOS this must be called from a user
+    // gesture; therefore we only mark that permission is required and
+    // expose `requestOrientationPermission` to the UI.
     if (
       typeof (DeviceOrientationEvent as any)?.requestPermission === "function"
     ) {
-      (DeviceOrientationEvent as any)
-        .requestPermission()
-        .then((permission: string) => {
-          if (permission === "granted") {
-            attachOrientationListeners();
-          } else {
-            setError({
-              type: "permission",
-              message: "Geräte-Orientierungsberechtigung verweigert",
-            });
-          }
-        })
-        .catch(() => {
-          setError({
-            type: "permission",
-            message: "Konnte Berechtigung nicht anfordern",
-          });
-        });
+      setPermissionRequired(true);
     } else {
-      // Android oder andere Browser
       attachOrientationListeners();
     }
 
     return () => {
-      window.removeEventListener(
-        "deviceorientationabsolute",
-        onAbsoluteOrientation,
-      );
-      window.removeEventListener("deviceorientation", onOrientation);
+      detachOrientationListeners();
     };
   }, []);
+
+  const requestOrientationPermission = async () => {
+    if (
+      typeof (DeviceOrientationEvent as any)?.requestPermission !== "function"
+    ) {
+      // Not required / not supported
+      attachOrientationListeners();
+      setPermissionRequired(false);
+      return true;
+    }
+
+    try {
+      const permission = await (
+        DeviceOrientationEvent as any
+      ).requestPermission();
+      if (permission === "granted") {
+        attachOrientationListeners();
+        setPermissionRequired(false);
+        return true;
+      }
+      setError({
+        type: "permission",
+        message: "Geräte-Orientierungsberechtigung verweigert",
+      });
+      return false;
+    } catch (e) {
+      setError({
+        type: "permission",
+        message: "Konnte Berechtigung nicht anfordern",
+      });
+      return false;
+    }
+  };
 
   // Geolocation (GPS)
   useEffect(() => {
@@ -232,5 +251,12 @@ export const useSensorData = () => {
     };
   }, []);
 
-  return { sensorData, headingSource, error, isReady };
+  return {
+    sensorData,
+    headingSource,
+    error,
+    isReady,
+    requestOrientationPermission,
+    permissionRequired,
+  } as const;
 };
