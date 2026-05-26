@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { Clock3, Sunrise, Sunset } from "lucide-react";
 
 interface DurationSliderProps {
   selectedDate: Date;
@@ -203,61 +204,67 @@ export const DurationSlider: React.FC<DurationSliderProps> = ({
         </button>
       </div>
 
-      <div className="relative pt-8 pb-7">
-        <div
-          ref={sliderRef}
-          className="absolute left-0 right-0 top-1/2 h-2 -translate-y-1/2 rounded-full bg-slate-200"
-        />
+      <div className="relative pt-5 pb-4">
+        <div ref={sliderRef} className="relative mx-5 h-8 touch-none">
+          <div className="absolute left-0 right-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-slate-200" />
 
-        <div
-          className="absolute top-1/2 h-2 -translate-y-1/2 rounded-full bg-blue-600"
-          style={{
-            left: `${startPercent}%`,
-            width: `${Math.max(0, endPercent - startPercent)}%`,
-          }}
-        />
+          <div
+            className="absolute top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-blue-600"
+            style={{
+              left: `${startPercent}%`,
+              width: `${Math.max(0, endPercent - startPercent)}%`,
+            }}
+          />
 
-        <button
-          type="button"
-          onPointerDown={(event) => {
-            event.preventDefault();
-            setActiveThumb("start");
-            updateThumbFromClientX(event.clientX, "start");
-          }}
-          className="absolute top-1/2 z-20 h-10 w-10 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-blue-800 bg-white shadow-md"
-          style={{ left: `${minutesToPercent(startMinutes)}%` }}
-          aria-label="Startzeit"
-        >
-          <span className="sr-only">Startzeit</span>
-          <span className="text-[10px] font-bold text-blue-800">1</span>
-        </button>
+          <button
+            type="button"
+            onPointerDown={(event) => {
+              event.preventDefault();
+              setActiveThumb("start");
+              updateThumbFromClientX(event.clientX, "start");
+            }}
+            className="absolute top-1/2 z-20 h-9 w-9 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-blue-800 bg-white shadow-md"
+            style={{ left: `${minutesToPercent(startMinutes)}%` }}
+            aria-label="Startzeit"
+          >
+            <span className="sr-only">Startzeit</span>
+            <span className="text-[10px] font-bold text-blue-800">1</span>
+          </button>
 
-        <button
-          type="button"
-          onPointerDown={(event) => {
-            event.preventDefault();
-            setActiveThumb("end");
-            updateThumbFromClientX(event.clientX, "end");
-          }}
-          className="absolute top-1/2 z-20 h-10 w-10 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-blue-800 bg-white shadow-md"
-          style={{ left: `${minutesToPercent(endMinutes)}%` }}
-          aria-label="Endzeit"
-        >
-          <span className="sr-only">Endzeit</span>
-          <span className="text-[10px] font-bold text-blue-800">2</span>
-        </button>
+          <button
+            type="button"
+            onPointerDown={(event) => {
+              event.preventDefault();
+              setActiveThumb("end");
+              updateThumbFromClientX(event.clientX, "end");
+            }}
+            className="absolute top-1/2 z-20 h-9 w-9 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-blue-800 bg-white shadow-md"
+            style={{ left: `${minutesToPercent(endMinutes)}%` }}
+            aria-label="Endzeit"
+          >
+            <span className="sr-only">Endzeit</span>
+            <span className="text-[10px] font-bold text-blue-800">2</span>
+          </button>
+        </div>
       </div>
 
-      <div className="mt-2 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-sm font-semibold text-blue-800">
-        <span>{sunriseTime ? formatTime(sunriseTime) : "--:--"}</span>
+      <div className="mt-2 w-full flex items-center justify-between text-sm font-semibold text-blue-800">
+        <span className="inline-flex items-center gap-1">
+          <Sunrise size={14} strokeWidth={2.2} />
+          <span>{sunriseTime ? formatTime(sunriseTime) : "--:--"}</span>
+        </span>
         <span className="text-blue-400">|</span>
         <span>{formatTime(startTime ?? selectedDate)}</span>
-        <span className="text-blue-400">|</span>
-        <span>Dauer: {formatDuration(durationMinutes)}</span>
-        <span className="text-blue-400">|</span>
+        <span className="inline-flex items-center gap-1">
+          <Clock3 size={14} strokeWidth={2.2} />
+          <span>{formatDuration(durationMinutes)}</span>
+        </span>
         <span>{formatTime(endTime ?? selectedDate)}</span>
         <span className="text-blue-400">|</span>
-        <span>{sunsetTime ? formatTime(sunsetTime) : "--:--"}</span>
+        <span className="inline-flex items-center gap-1">
+          <Sunset size={14} strokeWidth={2.2} />
+          <span>{sunsetTime ? formatTime(sunsetTime) : "--:--"}</span>
+        </span>
       </div>
     </div>
   );
