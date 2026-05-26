@@ -1,41 +1,67 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 interface DurationSliderProps {
-  duration: number; // in Stunden
-  onChange: (value: number) => void;
-  min?: number;
-  max?: number;
-  endTime?: Date | null;
-  startTime?: Date | null;
-  sunsetTime?: Date | null;
-  sunsetDurationHours?: number | null;
-  adjustedToSunrise?: boolean;
+  selectedDate: Date;
+  canGoPreviousDay: boolean;
+  onPreviousDay: () => void;
+  onNextDay: () => void;
+  sunriseTime: Date | null;
+  sunsetTime: Date | null;
+  startTime: Date | null;
+  endTime: Date | null;
+  onChangeStartTime: (value: Date) => void;
+  onChangeEndTime: (value: Date) => void;
 }
 
 export const DurationSlider: React.FC<DurationSliderProps> = ({
-  duration,
-  onChange,
-  min = 0,
-  max = 12,
-  endTime = null,
-  startTime = null,
-  sunsetTime = null,
-  sunsetDurationHours = null,
-  adjustedToSunrise = false,
+  selectedDate,
+  canGoPreviousDay,
+  onPreviousDay,
+  onNextDay,
+  sunriseTime,
+  sunsetTime,
+  startTime,
+  endTime,
+  onChangeStartTime,
+  onChangeEndTime,
 }) => {
-  const [now, setNow] = useState(() => new Date());
+  const sliderRef = useRef<HTMLDivElement | null>(null);
+  const [activeThumb, setActiveThumb] = useState<"start" | "end" | null>(null);
 
-  useEffect(() => {
-    const timerId = window.setInterval(() => {
-      setNow(new Date());
-    }, 30_000);
+  const MINUTES_PER_DAY = 24 * 60;
+  const MIN_GAP_MINUTES = 1;
 
-    return () => window.clearInterval(timerId);
-  }, []);
+  const getMinutesOfDay = (date: Date) =>
+    date.getHours() * 60 + date.getMinutes();
 
-  const getDurationLabel = (hours: number): string => {
-    const mins = Math.round((hours % 1) * 60);
-    const hrs = Math.floor(hours);
+  const clamp = (value: number, min: number, max: number) =>
+    Math.min(max, Math.max(min, value));
+
+  const minutesToDate = (baseDate: Date, minutes: number) => {
+    const next = new Date(baseDate);
+    next.setHours(0, 0, 0, 0);
+    next.setMinutes(minutes, 0, 0);
+    return next;
+  };
+
+  const formatTime = (date: Date) =>
+    date.toLocaleTimeString("de-DE", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+  const formatDate = (date: Date) =>
+    date.toLocaleDateString("de-DE", {
+      weekday: "short",
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+
+  const formatDuration = (minutes: number): string => {
+    const safeMinutes = Math.max(0, Math.round(minutes));
+    const hrs = Math.floor(safeMinutes / 60);
+    const mins = safeMinutes % 60;
 
     if (hrs === 0) {
       return `${mins}min`;
@@ -46,105 +72,192 @@ export const DurationSlider: React.FC<DurationSliderProps> = ({
     return `${hrs}h ${mins}min`;
   };
 
-  const getEndTimeLabel = (baseDate: Date, hours: number): string => {
-    const endDate = new Date(baseDate.getTime() + hours * 60 * 60 * 1000);
-    return endDate.toLocaleTimeString("de-DE", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
+  const sunriseMinutes = sunriseTime ? getMinutesOfDay(sunriseTime) : 0;
+  const sunsetMinutes = sunsetTime
+    ? getMinutesOfDay(sunsetTime)
+    : MINUTES_PER_DAY;
+  const safeMinMinutes = Math.max(
+    0,
+    Math.min(MINUTES_PER_DAY - 1, sunriseMinutes),
+  );
+  const safeMaxMinutes = Math.max(
+    safeMinMinutes + 1,
+    Math.min(MINUTES_PER_DAY, sunsetMinutes),
+  );
 
-  const formatClock = (date: Date) => {
-    return date.toLocaleTimeString("de-DE", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
+  const startMinutesRaw = startTime
+    ? getMinutesOfDay(startTime)
+    : safeMinMinutes;
+  const endMinutesRaw = endTime ? getMinutesOfDay(endTime) : safeMaxMinutes;
+  const startMinutes = clamp(
+    startMinutesRaw,
+    safeMinMinutes,
+    safeMaxMinutes - MIN_GAP_MINUTES,
+  );
+  const endMinutes = clamp(
+    endMinutesRaw,
+    startMinutes + MIN_GAP_MINUTES,
+    safeMaxMinutes,
+  );
 
-  const endTimeLabel = endTime
-    ? formatClock(endTime)
-    : getEndTimeLabel(now, duration);
-  const sunriseLabel =
-    adjustedToSunrise && startTime
-      ? `Sonnenaufgang ${formatClock(startTime)}`
-      : null;
-  const sunsetLabel = sunsetTime
-    ? `Sonnenuntergang ${formatClock(sunsetTime)}`
-    : null;
-  const hasSunsetSnapPoint =
-    sunsetDurationHours !== null &&
-    sunsetDurationHours >= min &&
-    sunsetDurationHours <= max;
-  const sunsetPercent = hasSunsetSnapPoint
-    ? ((sunsetDurationHours - min) / (max - min)) * 100
-    : null;
+  const startPercent =
+    ((startMinutes - safeMinMinutes) / (safeMaxMinutes - safeMinMinutes)) * 100;
+  const endPercent =
+    ((endMinutes - safeMinMinutes) / (safeMaxMinutes - safeMinMinutes)) * 100;
+  const durationMinutes = Math.max(0, endMinutes - startMinutes);
 
-  const snapToSunsetIfClose = (value: number) => {
-    if (!hasSunsetSnapPoint || sunsetDurationHours === null) {
-      return value;
+  const minutesToPercent = (minutes: number) =>
+    ((minutes - safeMinMinutes) / (safeMaxMinutes - safeMinMinutes)) * 100;
+
+  const clientXToMinutes = (clientX: number) => {
+    const rect = sliderRef.current?.getBoundingClientRect();
+    if (!rect || rect.width <= 0) {
+      return null;
     }
 
-    const snapThresholdHours = 0.2;
-    return Math.abs(value - sunsetDurationHours) <= snapThresholdHours
-      ? sunsetDurationHours
-      : value;
+    const ratio = clamp((clientX - rect.left) / rect.width, 0, 1);
+    return Math.round(
+      safeMinMinutes + ratio * (safeMaxMinutes - safeMinMinutes),
+    );
   };
 
-  const handleSliderChange = (rawValue: string) => {
-    const value = parseFloat(rawValue);
-    if (!Number.isFinite(value)) {
+  const updateThumbFromClientX = (clientX: number, thumb: "start" | "end") => {
+    const minutes = clientXToMinutes(clientX);
+    if (minutes === null) {
       return;
     }
 
-    onChange(snapToSunsetIfClose(value));
+    if (thumb === "start") {
+      const nextStartMinutes = clamp(
+        minutes,
+        safeMinMinutes,
+        endMinutes - MIN_GAP_MINUTES,
+      );
+      onChangeStartTime(minutesToDate(selectedDate, nextStartMinutes));
+      return;
+    }
+
+    const nextEndMinutes = clamp(
+      minutes,
+      startMinutes + MIN_GAP_MINUTES,
+      safeMaxMinutes,
+    );
+    onChangeEndTime(minutesToDate(selectedDate, nextEndMinutes));
   };
+
+  useEffect(() => {
+    if (activeThumb === null) {
+      return;
+    }
+
+    const handlePointerMove = (event: PointerEvent) => {
+      updateThumbFromClientX(event.clientX, activeThumb);
+    };
+
+    const handlePointerUp = () => {
+      setActiveThumb(null);
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+    window.addEventListener("pointercancel", handlePointerUp);
+
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("pointercancel", handlePointerUp);
+    };
+  }, [
+    activeThumb,
+    endMinutes,
+    safeMaxMinutes,
+    safeMinMinutes,
+    selectedDate,
+    startMinutes,
+  ]);
 
   return (
     <div className="w-full px-2 py-2">
-      <div className="relative pt-4">
-        {sunsetPercent !== null && (
-          <>
-            <div
-              className="pointer-events-none absolute top-1 h-6 w-0.5 -translate-x-1/2 rounded bg-amber-500"
-              style={{ left: `${sunsetPercent}%` }}
-            />
-            <div
-              className="pointer-events-none absolute -top-1 -translate-x-1/2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800"
-              style={{ left: `${sunsetPercent}%` }}
-            >
-              SU
-            </div>
-          </>
-        )}
+      <div className="mb-3 flex items-center gap-2 rounded-xl border border-slate-200 bg-white/70 px-2 py-1.5 text-slate-900 shadow-sm">
+        <button
+          type="button"
+          onClick={onPreviousDay}
+          disabled={!canGoPreviousDay}
+          className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-300 bg-white text-lg font-bold text-slate-700 disabled:cursor-not-allowed disabled:opacity-35"
+          aria-label="Vorheriger Tag"
+        >
+          ‹
+        </button>
 
-        <input
-          type="range"
-          min={min}
-          max={max}
-          step={0.01}
-          value={duration}
-          onChange={(e) => handleSliderChange(e.target.value)}
-          className="w-full h-3 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
-        />
+        <div className="min-w-0 flex-1 text-center text-sm font-semibold tracking-wide text-slate-800">
+          {formatDate(selectedDate)}
+        </div>
+
+        <button
+          type="button"
+          onClick={onNextDay}
+          className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-300 bg-white text-lg font-bold text-slate-700"
+          aria-label="Nächster Tag"
+        >
+          ›
+        </button>
       </div>
-      <div className="mt-2 flex items-center justify-center gap-2 text-sm font-semibold text-blue-800">
-        <span>Dauer: {getDurationLabel(duration)}</span>
+
+      <div className="relative pt-8 pb-7">
+        <div
+          ref={sliderRef}
+          className="absolute left-0 right-0 top-1/2 h-2 -translate-y-1/2 rounded-full bg-slate-200"
+        />
+
+        <div
+          className="absolute top-1/2 h-2 -translate-y-1/2 rounded-full bg-blue-600"
+          style={{
+            left: `${startPercent}%`,
+            width: `${Math.max(0, endPercent - startPercent)}%`,
+          }}
+        />
+
+        <button
+          type="button"
+          onPointerDown={(event) => {
+            event.preventDefault();
+            setActiveThumb("start");
+            updateThumbFromClientX(event.clientX, "start");
+          }}
+          className="absolute top-1/2 z-20 h-10 w-10 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-blue-800 bg-white shadow-md"
+          style={{ left: `${minutesToPercent(startMinutes)}%` }}
+          aria-label="Startzeit"
+        >
+          <span className="sr-only">Startzeit</span>
+          <span className="text-[10px] font-bold text-blue-800">1</span>
+        </button>
+
+        <button
+          type="button"
+          onPointerDown={(event) => {
+            event.preventDefault();
+            setActiveThumb("end");
+            updateThumbFromClientX(event.clientX, "end");
+          }}
+          className="absolute top-1/2 z-20 h-10 w-10 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-blue-800 bg-white shadow-md"
+          style={{ left: `${minutesToPercent(endMinutes)}%` }}
+          aria-label="Endzeit"
+        >
+          <span className="sr-only">Endzeit</span>
+          <span className="text-[10px] font-bold text-blue-800">2</span>
+        </button>
+      </div>
+
+      <div className="mt-2 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-sm font-semibold text-blue-800">
+        <span>{sunriseTime ? formatTime(sunriseTime) : "--:--"}</span>
         <span className="text-blue-400">|</span>
-        <span>Zeit: {endTimeLabel}</span>
-        {sunsetLabel && (
-          <>
-            <span className="text-blue-400">|</span>
-            <span>{sunsetLabel}</span>
-          </>
-        )}
-        {sunriseLabel && (
-          <>
-            <span className="text-blue-400">|</span>
-            <span>
-              {sunriseLabel} + {getDurationLabel(duration)}
-            </span>
-          </>
-        )}
+        <span>{formatTime(startTime ?? selectedDate)}</span>
+        <span className="text-blue-400">|</span>
+        <span>Dauer: {formatDuration(durationMinutes)}</span>
+        <span className="text-blue-400">|</span>
+        <span>{formatTime(endTime ?? selectedDate)}</span>
+        <span className="text-blue-400">|</span>
+        <span>{sunsetTime ? formatTime(sunsetTime) : "--:--"}</span>
       </div>
     </div>
   );

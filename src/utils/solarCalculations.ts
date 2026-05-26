@@ -11,21 +11,19 @@ interface SolarPosition {
   azimuth: number; // 0-360 Grad (Kompass-Richtung)
   tilt: number; // 0-90 Grad (Panel-Neigung, 0 = flach, 90 = steil)
   timeUntilOptimal: number; // Minuten
-  effectiveStartTime: Date;
-  targetTime: Date;
+}
+
+export interface SolarDayTimes {
+  sunriseTime: Date;
   sunsetTime: Date;
-  sunsetDurationHours: number;
-  adjustedToSunrise: boolean;
 }
 
 interface SolarParams {
   latitude: number;
   longitude: number;
-  duration: number; // in Stunden
+  startTime: Date;
+  endTime: Date;
 }
-
-const MINUTES_PER_DAY = 1440;
-const NOON_MINUTES = 720;
 
 const normalizeHeading = (angle: number) => ((angle % 360) + 360) % 360;
 
@@ -39,79 +37,72 @@ const getSolarSnapshot = (latitude: number, longitude: number, date: Date) => {
   return { azimuth, elevation };
 };
 
-const getMinutesOfDay = (date: Date) =>
-  date.getHours() * 60 + date.getMinutes();
-
 const isValidDate = (value: Date | undefined): value is Date => {
   return value instanceof Date && !Number.isNaN(value.getTime());
 };
 
-const addDays = (date: Date, days: number) => {
+const setClock = (date: Date, hours: number, minutes: number) => {
   const next = new Date(date);
-  next.setDate(next.getDate() + days);
+  next.setHours(hours, minutes, 0, 0);
   return next;
 };
 
-const getNextSunriseAfter = (
-  latitude: number,
-  longitude: number,
-  now: Date,
-) => {
-  for (let dayOffset = 0; dayOffset <= 3; dayOffset += 1) {
-    const date = addDays(now, dayOffset);
-    const times = SunCalc.getTimes(date, latitude, longitude);
-    const sunrise = times.sunrise;
-
-    if (isValidDate(sunrise) && sunrise.getTime() > now.getTime()) {
-      return sunrise;
-    }
-  }
-
-  return now;
+const getStartOfDay = (date: Date) => {
+  const next = new Date(date);
+  next.setHours(0, 0, 0, 0);
+  return next;
 };
 
-const getNextSunsetAfter = (
-  latitude: number,
-  longitude: number,
-  start: Date,
-) => {
-  for (let dayOffset = 0; dayOffset <= 3; dayOffset += 1) {
-    const date = addDays(start, dayOffset);
-    const times = SunCalc.getTimes(date, latitude, longitude);
-    const sunset = times.sunset;
-
-    if (isValidDate(sunset) && sunset.getTime() > start.getTime()) {
-      return sunset;
-    }
-  }
-
-  return start;
+const getEndOfDay = (date: Date) => {
+  const next = new Date(date);
+  next.setHours(23, 59, 59, 999);
+  return next;
 };
 
-const resolveStartAndTargetTime = (
+export const getSolarDayTimes = (
   latitude: number,
   longitude: number,
-  durationMinutes: number,
-  now: Date,
-) => {
-  const directTarget = new Date(now.getTime() + durationMinutes * 60000);
-  const sunsetToday = SunCalc.getTimes(now, latitude, longitude).sunset;
-  const afterSunset =
-    isValidDate(sunsetToday) && directTarget.getTime() > sunsetToday.getTime();
+  date: Date,
+): SolarDayTimes => {
+  // Lokaler Mittagsanker vermeidet UTC/Zeitzonen-Verschiebungen um Mitternacht.
+  const anchorDate = new Date(date);
+  anchorDate.setHours(12, 0, 0, 0);
+  const times = SunCalc.getTimes(anchorDate, latitude, longitude);
+  const dayStart = getStartOfDay(date);
+  const dayEnd = getEndOfDay(date);
 
-  if (!afterSunset) {
-    return {
-      effectiveStartTime: now,
-      targetTime: directTarget,
-      adjustedToSunrise: false,
-    };
-  }
+  const fallbackSunrise = setClock(date, 6, 0);
+  const fallbackSunset = setClock(date, 18, 0);
+  const sunriseCandidate =
+    isValidDate(times.sunrise) &&
+    times.sunrise.getTime() >= dayStart.getTime() &&
+    times.sunrise.getTime() <= dayEnd.getTime()
+      ? times.sunrise
+      : fallbackSunrise;
+  const sunsetCandidate =
+    isValidDate(times.sunset) &&
+    times.sunset.getTime() >= dayStart.getTime() &&
+    times.sunset.getTime() <= dayEnd.getTime()
+      ? times.sunset
+      : fallbackSunset;
 
-  const sunriseStart = getNextSunriseAfter(latitude, longitude, now);
+  const sunriseTime = sunriseCandidate;
+  const fallbackAfterSunrise = new Date(
+    sunriseTime.getTime() + 12 * 60 * 60 * 1000,
+  );
+  const fallbackSameDayMax = setClock(sunriseTime, 23, 59);
+  const fallbackValidSunset =
+    fallbackAfterSunrise > fallbackSameDayMax
+      ? fallbackSameDayMax
+      : fallbackAfterSunrise;
+  const sunsetTime =
+    sunsetCandidate.getTime() > sunriseTime.getTime()
+      ? sunsetCandidate
+      : fallbackValidSunset;
+
   return {
-    effectiveStartTime: sunriseStart,
-    targetTime: new Date(sunriseStart.getTime() + durationMinutes * 60000),
-    adjustedToSunrise: true,
+    sunriseTime,
+    sunsetTime,
   };
 };
 
@@ -137,26 +128,18 @@ export const calculateSolarPosition = (
   params: SolarParams,
   now: Date = new Date(),
 ): SolarPosition => {
-  const { latitude, longitude, duration } = params;
-  const durationMinutes = Math.max(1, Math.round(duration * 60));
-  const { effectiveStartTime, targetTime, adjustedToSunrise } =
-    resolveStartAndTargetTime(latitude, longitude, durationMinutes, now);
-  const sunsetTime = getNextSunsetAfter(
-    latitude,
-    longitude,
-    effectiveStartTime,
+  const { latitude, longitude, startTime, endTime } = params;
+  const durationMinutes = Math.max(
+    1,
+    Math.round((endTime.getTime() - startTime.getTime()) / 60000),
   );
-  const sunsetDurationHours =
-    (sunsetTime.getTime() - effectiveStartTime.getTime()) / (60 * 60 * 1000);
   // Fester Schritt verhindert Spruenge bei Slider-Aenderungen durch wechselnde Diskretisierung.
   const sampleStep = 2;
   const sampleCount = Math.max(2, Math.ceil(durationMinutes / sampleStep) + 1);
 
   const samples = Array.from({ length: sampleCount }, (_, index) => {
     const sampleMinutes = Math.min(durationMinutes, index * sampleStep);
-    const sampleDate = new Date(
-      effectiveStartTime.getTime() + sampleMinutes * 60000,
-    );
+    const sampleDate = new Date(startTime.getTime() + sampleMinutes * 60000);
     return getSolarSnapshot(latitude, longitude, sampleDate);
   });
 
@@ -166,22 +149,16 @@ export const calculateSolarPosition = (
   // Physik: Wenn die Sonne tiefer steht, muss das Panel steiler sein.
   const tilt = 90 - elevation;
 
-  // Zeit bis zum Sonnenhöchststand (ungefähr)
-  const nowMinutes = getMinutesOfDay(now);
-  let timeUntilOptimal = Math.abs(nowMinutes - NOON_MINUTES);
-  if (timeUntilOptimal > NOON_MINUTES) {
-    timeUntilOptimal = MINUTES_PER_DAY - timeUntilOptimal;
-  }
+  const midpoint = new Date((startTime.getTime() + endTime.getTime()) / 2);
+  const timeUntilOptimal = Math.max(
+    0,
+    Math.round(Math.abs(midpoint.getTime() - now.getTime()) / 60000),
+  );
 
   return {
     azimuth,
     tilt,
     timeUntilOptimal,
-    effectiveStartTime,
-    targetTime,
-    sunsetTime,
-    sunsetDurationHours,
-    adjustedToSunrise,
   };
 };
 

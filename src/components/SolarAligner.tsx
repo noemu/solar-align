@@ -7,7 +7,40 @@ import {
   calculateSolarPosition,
   calculateAlignmentError,
   isAlignmentAccurate,
+  getSolarDayTimes,
 } from "../utils/solarCalculations";
+
+const getStartOfDay = (date: Date) =>
+  new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+const isSameDay = (left: Date, right: Date) =>
+  left.getFullYear() === right.getFullYear() &&
+  left.getMonth() === right.getMonth() &&
+  left.getDate() === right.getDate();
+
+const addDays = (date: Date, days: number) => {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+};
+
+const addMinutes = (date: Date, minutes: number) =>
+  new Date(date.getTime() + minutes * 60_000);
+
+const addHours = (date: Date, hours: number) =>
+  new Date(date.getTime() + hours * 60 * 60_000);
+
+const DEFAULT_RANGE_HOURS = 4;
+
+const clampDate = (value: Date, min: Date, max: Date) => {
+  if (value < min) {
+    return new Date(min);
+  }
+  if (value > max) {
+    return new Date(max);
+  }
+  return new Date(value);
+};
 
 export const SolarAligner: React.FC = () => {
   const {
@@ -18,22 +51,17 @@ export const SolarAligner: React.FC = () => {
     requestOrientationPermission,
     permissionRequired,
   } = useSensorData();
-  const [duration, setDuration] = useState(4); // Stunden
+  const [selectedDate, setSelectedDate] = useState(() =>
+    getStartOfDay(new Date()),
+  );
   const [targetAzimuth, setTargetAzimuth] = useState(180);
   const [targetElevation, setTargetElevation] = useState(45);
-  const [effectiveStartTime, setEffectiveStartTime] = useState<Date | null>(
-    null,
-  );
-  const [effectiveTargetTime, setEffectiveTargetTime] = useState<Date | null>(
-    null,
-  );
-  const [effectiveSunsetTime, setEffectiveSunsetTime] = useState<Date | null>(
-    null,
-  );
-  const [sunsetDurationHours, setSunsetDurationHours] = useState<number | null>(
-    null,
-  );
-  const [adjustedToSunrise, setAdjustedToSunrise] = useState(false);
+  const [sunriseTime, setSunriseTime] = useState<Date | null>(null);
+  const [sunsetTime, setSunsetTime] = useState<Date | null>(null);
+  const [rangeStartTime, setRangeStartTime] = useState<Date | null>(null);
+  const [rangeEndTime, setRangeEndTime] = useState<Date | null>(null);
+  const [currentTime, setCurrentTime] = useState(() => new Date());
+  const [hasUserAdjustedRange, setHasUserAdjustedRange] = useState(false);
   const [elevationError, setElevationError] = useState(0);
   const [isAccurate, setIsAccurate] = useState(false);
   const [headingOffset, setHeadingOffset] = useState<number | null>(null);
@@ -59,29 +87,130 @@ export const SolarAligner: React.FC = () => {
     setHeadingOffset(null);
   };
 
-  // Berechne Solar-Position wenn GPS-Daten vorhanden sind
+  const canGoPreviousDay = !isSameDay(selectedDate, getStartOfDay(new Date()));
+
+  const handlePreviousDay = () => {
+    if (!canGoPreviousDay) {
+      return;
+    }
+
+    setSelectedDate((current) => getStartOfDay(addDays(current, -1)));
+    setHasUserAdjustedRange(false);
+  };
+
+  const handleNextDay = () => {
+    setSelectedDate((current) => getStartOfDay(addDays(current, 1)));
+    setHasUserAdjustedRange(false);
+  };
+
+  useEffect(() => {
+    const timerId = window.setInterval(() => {
+      setCurrentTime(new Date());
+    }, 30_000);
+
+    return () => window.clearInterval(timerId);
+  }, []);
+
+  // Berechne Tagesgrenzen und Default-Zeitfenster wenn GPS-Daten vorhanden sind
   useEffect(() => {
     if (
       isReady &&
       sensorData.latitude !== null &&
       sensorData.longitude !== null
     ) {
+      const dayTimes = getSolarDayTimes(
+        sensorData.latitude,
+        sensorData.longitude,
+        selectedDate,
+      );
+
+      setSunriseTime(dayTimes.sunriseTime);
+      setSunsetTime(dayTimes.sunsetTime);
+
+      const today = getStartOfDay(new Date());
+      const isToday = isSameDay(selectedDate, today);
+
+      if (hasUserAdjustedRange) {
+        return;
+      }
+
+      const latestAllowedStart = addMinutes(dayTimes.sunsetTime, -1);
+      const defaultStart = clampDate(
+        isToday ? currentTime : dayTimes.sunriseTime,
+        dayTimes.sunriseTime,
+        latestAllowedStart,
+      );
+      const defaultEnd = clampDate(
+        addHours(defaultStart, DEFAULT_RANGE_HOURS),
+        addMinutes(defaultStart, 1),
+        dayTimes.sunsetTime,
+      );
+
+      setRangeStartTime(defaultStart);
+      setRangeEndTime(defaultEnd);
+    }
+  }, [
+    isReady,
+    sensorData.latitude,
+    sensorData.longitude,
+    selectedDate,
+    currentTime,
+    hasUserAdjustedRange,
+  ]);
+
+  // Berechne Solar-Position fuer das gewählte Zeitintervall
+  useEffect(() => {
+    if (
+      isReady &&
+      sensorData.latitude !== null &&
+      sensorData.longitude !== null &&
+      rangeStartTime !== null &&
+      rangeEndTime !== null
+    ) {
       const solarPos = calculateSolarPosition({
         latitude: sensorData.latitude,
         longitude: sensorData.longitude,
-        duration,
+        startTime: rangeStartTime,
+        endTime: rangeEndTime,
       });
 
       // Ziel fuer die obere Modulkante: entgegengesetzt zur Sonnenrichtung.
       setTargetAzimuth(normalizeHeading(solarPos.azimuth + 180));
       setTargetElevation(solarPos.tilt);
-      setEffectiveStartTime(solarPos.effectiveStartTime);
-      setEffectiveTargetTime(solarPos.targetTime);
-      setEffectiveSunsetTime(solarPos.sunsetTime);
-      setSunsetDurationHours(solarPos.sunsetDurationHours);
-      setAdjustedToSunrise(solarPos.adjustedToSunrise);
     }
-  }, [isReady, sensorData.latitude, sensorData.longitude, duration]);
+  }, [
+    isReady,
+    sensorData.latitude,
+    sensorData.longitude,
+    rangeStartTime,
+    rangeEndTime,
+  ]);
+
+  const handleChangeStartTime = (value: Date) => {
+    setHasUserAdjustedRange(true);
+
+    if (rangeEndTime === null) {
+      setRangeStartTime(value);
+      return;
+    }
+
+    const nextStart =
+      value < rangeEndTime ? value : addMinutes(rangeEndTime, -1);
+    setRangeStartTime(nextStart);
+  };
+
+  const handleChangeEndTime = (value: Date) => {
+    setHasUserAdjustedRange(true);
+
+    if (rangeStartTime === null) {
+      setRangeEndTime(value);
+      return;
+    }
+
+    const nextEnd =
+      value > rangeStartTime ? value : addMinutes(rangeStartTime, 1);
+    setRangeEndTime(nextEnd);
+  };
 
   // Berechne Ausrichtungsfehler
   useEffect(() => {
@@ -113,15 +242,16 @@ export const SolarAligner: React.FC = () => {
       <div className="mx-auto h-full w-full max-w-[560px] grid grid-rows-[auto_1fr_auto] gap-2">
         <section className="rounded-2xl bg-white/85 border border-sky-200 shadow-sm px-1 py-2">
           <DurationSlider
-            duration={duration}
-            onChange={setDuration}
-            min={0}
-            max={12}
-            startTime={effectiveStartTime}
-            endTime={effectiveTargetTime}
-            sunsetTime={effectiveSunsetTime}
-            sunsetDurationHours={sunsetDurationHours}
-            adjustedToSunrise={adjustedToSunrise}
+            selectedDate={selectedDate}
+            canGoPreviousDay={canGoPreviousDay}
+            onPreviousDay={handlePreviousDay}
+            onNextDay={handleNextDay}
+            sunriseTime={sunriseTime}
+            sunsetTime={sunsetTime}
+            startTime={rangeStartTime}
+            endTime={rangeEndTime}
+            onChangeStartTime={handleChangeStartTime}
+            onChangeEndTime={handleChangeEndTime}
           />
         </section>
 
