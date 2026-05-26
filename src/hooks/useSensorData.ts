@@ -124,12 +124,9 @@ export const useSensorData = () => {
     const event = rawEvent as OrientationEventWithCompass;
     const result = getHeadingFromEvent(event);
     const inclination = getInclinationFromEvent(event);
+    const hasHeading = result !== null;
 
-    if (result === null) {
-      return;
-    }
-
-    if (isAbsolute) {
+    if (isAbsolute && hasHeading) {
       hasAbsoluteHeading.current = true;
     }
 
@@ -138,20 +135,21 @@ export const useSensorData = () => {
       return;
     }
 
-    const source: HeadingSource = isAbsolute
-      ? result.usedWebkit
-        ? "abs+webkit"
-        : "abs+alpha"
-      : result.usedWebkit
-        ? "rel+webkit"
-        : "rel+alpha";
-    const hasMagneticReference = isAbsolute || result.usedWebkit;
+    if (hasHeading) {
+      const source: HeadingSource = isAbsolute
+        ? result.usedWebkit
+          ? "abs+webkit"
+          : "abs+alpha"
+        : result.usedWebkit
+          ? "rel+webkit"
+          : "rel+alpha";
+      setHeadingSource(source);
+    }
 
-    setHeadingSource(source);
     setSensorData((prev) => ({
       ...prev,
-      heading: result.heading,
-      magneticHeading: hasMagneticReference
+      heading: hasHeading ? result.heading : prev.heading,
+      magneticHeading: hasHeading && (isAbsolute || result.usedWebkit)
         ? result.heading
         : prev.magneticHeading,
       pitch: inclination ?? prev.pitch,
