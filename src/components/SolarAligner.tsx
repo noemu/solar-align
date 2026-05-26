@@ -21,6 +21,19 @@ export const SolarAligner: React.FC = () => {
   const [duration, setDuration] = useState(4); // Stunden
   const [targetAzimuth, setTargetAzimuth] = useState(180);
   const [targetElevation, setTargetElevation] = useState(45);
+  const [effectiveStartTime, setEffectiveStartTime] = useState<Date | null>(
+    null,
+  );
+  const [effectiveTargetTime, setEffectiveTargetTime] = useState<Date | null>(
+    null,
+  );
+  const [effectiveSunsetTime, setEffectiveSunsetTime] = useState<Date | null>(
+    null,
+  );
+  const [sunsetDurationHours, setSunsetDurationHours] = useState<number | null>(
+    null,
+  );
+  const [adjustedToSunrise, setAdjustedToSunrise] = useState(false);
   const [elevationError, setElevationError] = useState(0);
   const [isAccurate, setIsAccurate] = useState(false);
   const [headingOffset, setHeadingOffset] = useState<number | null>(null);
@@ -62,6 +75,11 @@ export const SolarAligner: React.FC = () => {
       // Ziel fuer die obere Modulkante: entgegengesetzt zur Sonnenrichtung.
       setTargetAzimuth(normalizeHeading(solarPos.azimuth + 180));
       setTargetElevation(solarPos.tilt);
+      setEffectiveStartTime(solarPos.effectiveStartTime);
+      setEffectiveTargetTime(solarPos.targetTime);
+      setEffectiveSunsetTime(solarPos.sunsetTime);
+      setSunsetDurationHours(solarPos.sunsetDurationHours);
+      setAdjustedToSunrise(solarPos.adjustedToSunrise);
     }
   }, [isReady, sensorData.latitude, sensorData.longitude, duration]);
 
@@ -99,6 +117,11 @@ export const SolarAligner: React.FC = () => {
             onChange={setDuration}
             min={0}
             max={12}
+            startTime={effectiveStartTime}
+            endTime={effectiveTargetTime}
+            sunsetTime={effectiveSunsetTime}
+            sunsetDurationHours={sunsetDurationHours}
+            adjustedToSunrise={adjustedToSunrise}
           />
         </section>
 
