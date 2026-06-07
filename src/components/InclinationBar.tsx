@@ -1,23 +1,58 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
+import { sensorData, subscribe } from "../hooks/useSensorData";
 
 interface InclinationBarProps {
-  currentPitch: number; // Aktuelle Neigung (-90 bis 90)
   targetElevation: number; // Zielneigung (0-90)
 }
 
 export const InclinationBar: React.FC<InclinationBarProps> = ({
-  currentPitch,
   targetElevation,
 }) => {
+  const pointerRef = useRef<HTMLDivElement | null>(null);
   // Für PV ist nur 0..90° relevant.
-  const clampedCurrent = Math.max(0, Math.min(90, Math.abs(currentPitch)));
   const clampedTarget = Math.max(0, Math.min(90, targetElevation));
 
-  // 0° unten, 90° oben
-  const currentPercent = (clampedCurrent / 90) * 100;
   const targetPercent = (clampedTarget / 90) * 100;
-  const currentPercentInBox = Math.max(2, Math.min(98, currentPercent));
   const targetPercentInBox = Math.max(8, Math.min(92, targetPercent));
+
+  useEffect(() => {
+    let animationFrameId: number;
+    let containerHeight = 0;
+
+    const updateLoop = () => {
+      if (pointerRef.current && pointerRef.current.parentElement) {
+        // Get container height on first call or when it changes
+        const container = pointerRef.current.parentElement;
+        const newHeight = container.offsetHeight;
+        if (newHeight !== containerHeight) {
+          containerHeight = newHeight;
+        }
+
+        // Read directly from global sensorData
+        const clampedCurrent = Math.max(
+          0,
+          Math.min(90, Math.abs(sensorData.pitch)),
+        );
+
+        // 0° flach (unten), 90° senkrecht (oben)
+        const currentPercent = (clampedCurrent / 90) * 100;
+        const pixelsFromTop = ((100 - currentPercent) / 100) * containerHeight;
+
+        pointerRef.current.style.transform = `translateY(${pixelsFromTop}px)`;
+      }
+      animationFrameId = requestAnimationFrame(updateLoop);
+    };
+
+    // Subscribe to sensor updates
+    const unsubscribe = subscribe(updateLoop);
+
+    animationFrameId = requestAnimationFrame(updateLoop);
+
+    return () => {
+      cancelAnimationFrame(animationFrameId);
+      unsubscribe();
+    };
+  }, []);
 
   return (
     <div className="h-full w-full flex items-stretch gap-2">
@@ -47,8 +82,9 @@ export const InclinationBar: React.FC<InclinationBarProps> = ({
         </div>
 
         <div
-          className="absolute left-1 right-1 transition-[bottom] duration-75"
-          style={{ bottom: `${currentPercentInBox}%` }}
+          ref={pointerRef}
+          className="absolute left-1 right-1 top-0 transition-[transform] duration-75"
+          style={{ willChange: "transform" }}
         >
           <div className="flex items-center">
             <div className="w-0 h-0 border-y-[6px] border-y-transparent border-r-[10px] border-r-blue-700" />

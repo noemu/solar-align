@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
+import { subscribe } from "../hooks/useSensorData";
 
 interface CompassProps {
   currentHeading: number;
@@ -11,6 +12,11 @@ export const Compass: React.FC<CompassProps> = ({
   targetAzimuth,
   isAccurate,
 }) => {
+  const dialRef = useRef<SVGGElement>(null);
+  const circleRef = useRef<SVGCircleElement>(null);
+  const headingRef = useRef(currentHeading);
+  const isAccurateRef = useRef(isAccurate);
+
   const size = 220;
   const center = size / 2;
   const radius = size / 2 - 18;
@@ -20,8 +26,47 @@ export const Compass: React.FC<CompassProps> = ({
   const targetX = center + (radius - 14) * Math.sin(targetAngle);
   const targetY = center - (radius - 14) * Math.cos(targetAngle);
 
-  // Die Scheibe muss entgegengesetzt zur Geraete-Drehung rotieren.
-  const dialRotation = -currentHeading;
+  // Track prop changes
+  useEffect(() => {
+    headingRef.current = currentHeading;
+  }, [currentHeading]);
+
+  useEffect(() => {
+    isAccurateRef.current = isAccurate;
+  }, [isAccurate]);
+
+  useEffect(() => {
+    let animationFrameId: number;
+
+    const updateLoop = () => {
+      // Update dial rotation via CSS
+      if (dialRef.current) {
+        const dialRotation = -headingRef.current;
+        dialRef.current.style.transform = `rotate(${dialRotation}deg)`;
+        dialRef.current.style.transformOrigin = `${center}px ${center}px`;
+      }
+
+      // Update circle background
+      if (circleRef.current) {
+        circleRef.current.setAttribute(
+          "fill",
+          isAccurateRef.current ? "#dcfce7" : "#eef2ff",
+        );
+      }
+
+      animationFrameId = requestAnimationFrame(updateLoop);
+    };
+
+    // Subscribe to sensor updates for high-frequency updates
+    const unsubscribe = subscribe(updateLoop);
+
+    animationFrameId = requestAnimationFrame(updateLoop);
+
+    return () => {
+      cancelAnimationFrame(animationFrameId);
+      unsubscribe();
+    };
+  }, [center]);
 
   return (
     <div className="w-full max-w-[clamp(170px,58vw,300px)] aspect-square flex items-center justify-center">
@@ -32,6 +77,7 @@ export const Compass: React.FC<CompassProps> = ({
         className="drop-shadow-md"
       >
         <circle
+          ref={circleRef}
           cx={center}
           cy={center}
           r={radius}
@@ -40,7 +86,7 @@ export const Compass: React.FC<CompassProps> = ({
           strokeWidth="2.5"
         />
 
-        <g transform={`rotate(${dialRotation} ${center} ${center})`}>
+        <g ref={dialRef} style={{ willChange: "transform" }}>
           {Array.from({ length: 36 }).map((_, i) => {
             const angle = (i * 10 * Math.PI) / 180;
             const major = i % 9 === 0;

@@ -2,7 +2,16 @@ import React, { useState, useEffect } from "react";
 import { Compass } from "./Compass";
 import { InclinationBar } from "./InclinationBar";
 import { DurationSlider } from "./DurationSlider";
-import { useSensorData } from "../hooks/useSensorData";
+import {
+  sensorData,
+  initializeSensors,
+  requestOrientationPermission,
+  getError,
+  getIsReady,
+  getPermissionRequired,
+  getHeadingSource,
+  subscribe,
+} from "../hooks/useSensorData";
 import {
   calculateSolarPosition,
   calculateAlignmentError,
@@ -43,14 +52,6 @@ const clampDate = (value: Date, min: Date, max: Date) => {
 };
 
 export const SolarAligner: React.FC = () => {
-  const {
-    sensorData,
-    headingSource,
-    error,
-    isReady,
-    requestOrientationPermission,
-    permissionRequired,
-  } = useSensorData();
   const [selectedDate, setSelectedDate] = useState(() =>
     getStartOfDay(new Date()),
   );
@@ -65,6 +66,8 @@ export const SolarAligner: React.FC = () => {
   const [elevationError, setElevationError] = useState(0);
   const [isAccurate, setIsAccurate] = useState(false);
   const [headingOffset, setHeadingOffset] = useState<number | null>(null);
+  // Rerender-Trigger für Sensor-Updates
+  const [, setTick] = useState(0);
 
   const normalizeHeading = (angle: number) => ((angle % 360) + 360) % 360;
   const calibrationBaseHeading = sensorData.magneticHeading;
@@ -74,6 +77,15 @@ export const SolarAligner: React.FC = () => {
       ? sensorData.heading
       : calibrationBaseHeading - headingOffset,
   );
+
+  // Initialize sensors on mount and subscribe to updates
+  useEffect(() => {
+    initializeSensors();
+    const unsubscribe = subscribe(() => setTick((t) => t + 1));
+    return () => {
+      unsubscribe();
+    };
+  }, []);
 
   const handleCalibrate = () => {
     if (!canCalibrate || calibrationBaseHeading === null) {
@@ -113,6 +125,7 @@ export const SolarAligner: React.FC = () => {
 
   // Berechne Tagesgrenzen und Default-Zeitfenster wenn GPS-Daten vorhanden sind
   useEffect(() => {
+    const isReady = getIsReady();
     if (
       isReady &&
       sensorData.latitude !== null &&
@@ -150,7 +163,6 @@ export const SolarAligner: React.FC = () => {
       setRangeEndTime(defaultEnd);
     }
   }, [
-    isReady,
     sensorData.latitude,
     sensorData.longitude,
     selectedDate,
@@ -160,6 +172,7 @@ export const SolarAligner: React.FC = () => {
 
   // Berechne Solar-Position fuer das gewählte Zeitintervall
   useEffect(() => {
+    const isReady = getIsReady();
     if (
       isReady &&
       sensorData.latitude !== null &&
@@ -178,13 +191,7 @@ export const SolarAligner: React.FC = () => {
       setTargetAzimuth(normalizeHeading(solarPos.azimuth + 180));
       setTargetElevation(solarPos.tilt);
     }
-  }, [
-    isReady,
-    sensorData.latitude,
-    sensorData.longitude,
-    rangeStartTime,
-    rangeEndTime,
-  ]);
+  }, [sensorData.latitude, sensorData.longitude, rangeStartTime, rangeEndTime]);
 
   const handleChangeStartTime = (value: Date) => {
     setHasUserAdjustedRange(true);
@@ -261,10 +268,7 @@ export const SolarAligner: React.FC = () => {
             style={{ gridTemplateColumns: "124px minmax(0, 1fr)" }}
           >
             <div className="h-full min-h-0 border-r border-slate-200 pr-2 flex items-stretch justify-center">
-              <InclinationBar
-                currentPitch={sensorData.pitch}
-                targetElevation={targetElevation}
-              />
+              <InclinationBar targetElevation={targetElevation} />
             </div>
 
             <div className="min-w-0 h-full min-h-0 flex flex-col items-center">
@@ -292,7 +296,7 @@ export const SolarAligner: React.FC = () => {
                 >
                   Reset
                 </button>
-                {permissionRequired && (
+                {getPermissionRequired() && (
                   <button
                     type="button"
                     onClick={() => void requestOrientationPermission()}
@@ -307,17 +311,17 @@ export const SolarAligner: React.FC = () => {
         </main>
 
         <div className="text-center text-xs text-slate-600 h-4">
-          {error
+          {getError()
             ? "Sensorfehler"
-            : permissionRequired
+            : getPermissionRequired()
               ? "Tippe 'Sensoren aktivieren' oben, um Berechtigungen zu erlauben"
-              : !isReady
+              : !getIsReady()
                 ? "..."
                 : !canCalibrate
                   ? "Kompass: Ohne Magnetdaten (nur IMU)"
                   : headingOffset === null
-                    ? `Kompass: Sensor (${headingSource})`
-                    : `Kompass: Kalibriert auf Magnet (${headingSource})`}
+                    ? `Kompass: Sensor (${getHeadingSource()})`
+                    : `Kompass: Kalibriert auf Magnet (${getHeadingSource()})`}
         </div>
       </div>
     </div>
